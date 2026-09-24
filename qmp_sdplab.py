@@ -68,18 +68,46 @@ sigma_y = np.array([[0.0, -1.0j], [1.0j, 0.0]], dtype=complex)
 sigma_z = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=complex)
 
 
-def ghz_state(theta: float = 0.0) -> np.ndarray:
+def bell_phi_plus() -> np.ndarray:
+    """
+    Gera o estado de Bell puro |Phi+> = (|00> + |11>) / sqrt(2).
+    """
+    return (tensor(zero, zero) + tensor(one, one)) / np.sqrt(2.0)
+
+
+# Instância padrão do estado de Bell |Phi+>
+phi_plus = bell_phi_plus()
+
+
+def ghz(theta: float = 0.0) -> np.ndarray:
     """
     Gera o estado puro |GHZ_theta> = (|000> + exp(i theta)|111>) / sqrt(2).
     """
     return (tensor(zero, zero, zero) + np.exp(1j * theta) * tensor(one, one, one)) / np.sqrt(2.0)
 
 
-def bell_phi_plus() -> np.ndarray:
+# Alias em inglês para compatibilidade
+ghz_state = ghz
+
+
+def verifica_densidade(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any]:
     """
-    Gera o estado de Bell puro |Phi+> = (|00> + |11>) / sqrt(2).
+    Verifica as condições básicas e estruturais de uma matriz densidade:
+    1. Hermiticidade: rho == rho^dagger
+    2. Positividade: autovalores >= -tol
+    3. Normalização: Tr(rho) == 1
     """
-    return (tensor(zero, zero) + tensor(one, one)) / np.sqrt(2.0)
+    rho = np.asarray(rho, dtype=complex)
+    hermitiana = bool(np.allclose(rho, rho.conj().T, atol=tol))
+    autovalores = np.linalg.eigvalsh((rho + rho.conj().T) / 2.0)
+    positiva = bool(np.all(autovalores >= -tol))
+    normalizada = bool(np.isclose(np.trace(rho), 1.0, atol=tol))
+    return {
+        "hermitiana": hermitiana,
+        "positiva": positiva,
+        "traco_1": normalizada,
+        "autovalores": autovalores,
+    }
 
 
 # ===========================================================================
@@ -154,7 +182,7 @@ def partial_trace(
     return reduced_tensor.reshape(d_out, d_out)
 
 
-def hermitian_basis(d: int) -> List[np.ndarray]:
+def base_hermitiana(d: int) -> List[np.ndarray]:
     r"""
     Gera uma base ortonormal para o espaço vetorial real das matrizes Hermitianas
     :math:`\mathrm{Herm}(d)`, com respeito ao produto interno de Hilbert-Schmidt:
@@ -166,70 +194,80 @@ def hermitian_basis(d: int) -> List[np.ndarray]:
     - :math:`d(d-1)/2` partes imaginárias antissimétricas :math:`\frac{i(|i\rangle\langle j| - |j\rangle\langle i|)}{\sqrt{2}}`.
     Total: :math:`d^2` matrizes Hermitianas ortonormais.
     """
-    basis: List[np.ndarray] = []
+    bases: List[np.ndarray] = []
     # Elementos diagonais
     for i in range(d):
-        E = np.zeros((d, d), dtype=complex)
-        E[i, i] = 1.0
-        basis.append(E)
+        E_ii = np.zeros((d, d), dtype=complex)
+        E_ii[i, i] = 1.0
+        bases.append(E_ii)
 
     # Elementos fora da diagonal
     for i in range(d):
         for j in range(i + 1, d):
             # Parte real
-            E_re = np.zeros((d, d), dtype=complex)
-            E_re[i, j] = 1.0 / np.sqrt(2.0)
-            E_re[j, i] = 1.0 / np.sqrt(2.0)
-            basis.append(E_re)
+            E_real = np.zeros((d, d), dtype=complex)
+            E_real[i, j] = 1.0 / np.sqrt(2.0)
+            E_real[j, i] = 1.0 / np.sqrt(2.0)
+            bases.append(E_real)
 
             # Parte imaginária
-            E_im = np.zeros((d, d), dtype=complex)
-            E_im[i, j] = 1.0j / np.sqrt(2.0)
-            E_im[j, i] = -1.0j / np.sqrt(2.0)
-            basis.append(E_im)
+            E_imag = np.zeros((d, d), dtype=complex)
+            E_imag[i, j] = 1.0j / np.sqrt(2.0)
+            E_imag[j, i] = -1.0j / np.sqrt(2.0)
+            bases.append(E_imag)
 
-    return basis
+    return bases
+
+
+# Alias em inglês para compatibilidade
+hermitian_basis = base_hermitiana
 
 
 def embed_operator(
-    O_S: np.ndarray,
-    systems: Sequence[int],
-    dims: Sequence[int],
+    O_s: np.ndarray,
+    sistema: Sequence[int],
+    dim: Optional[Sequence[int]] = None,
+    *,
+    dims: Optional[Sequence[int]] = None,
 ) -> np.ndarray:
     r"""
-    Incorpora um operador local :math:`O_S` atuando no subsistema :math:`S` no espaço
-    global :math:`\mathcal{H} = \bigotimes_k \mathcal{H}_k`, inserindo a identidade
+    Incorpora um operador local :math:`O_s` atuando no subsistema :math:`S` (`sistema`)
+    no espaço global :math:`\mathcal{H} = \bigotimes_k \mathcal{H}_k`, inserindo a identidade
     :math:`I_{d_c}` nos subsistemas do complemento :math:`S^c`.
 
     Esta operação é fundamental para transcrever a restrição de traço parcial para
     o produto interno global por dualidade:
-    :math:`\operatorname{Tr}[ (O_S \otimes I_{S^c}) \rho ] = \operatorname{Tr}[ O_S \operatorname{Tr}_{S^c}(\rho) ]`.
+    :math:`\operatorname{Tr}[ (O_s \otimes I_{S^c}) \rho ] = \operatorname{Tr}[ O_s \operatorname{Tr}_{S^c}(\rho) ]`.
     """
-    dims = tuple(dims)
-    N = len(dims)
-    systems = tuple(systems)
-    k = len(systems)
-    complement = tuple(i for i in range(N) if i not in systems)
+    if dim is None:
+        dim = dims
+    if dim is None:
+        raise ValueError("É necessário especificar as dimensões locais `dim` (ou `dims`).")
+    dims_tuple = tuple(dim)
+    Nt = len(dims_tuple)
+    sistema_tuple = tuple(sistema)
+    Ns = len(sistema_tuple)
+    complemento = tuple(i for i in range(Nt) if i not in sistema_tuple)
 
-    s_dims = tuple(dims[i] for i in systems)
-    O_tensor = O_S.reshape(s_dims + s_dims)
+    dimensao_s = tuple(dims_tuple[i] for i in sistema_tuple)
+    O_tensor = O_s.reshape(dimensao_s + dimensao_s)
 
     # Produto externo com identidade para cada sistema complementar
     res = O_tensor
-    for c in complement:
-        I_c = np.eye(dims[c], dtype=O_S.dtype)
+    for c in complemento:
+        I_c = np.eye(dims_tuple[c], dtype=O_s.dtype)
         res = np.multiply.outer(res, I_c)
 
     # Mapeamento dos eixos originais para a ordem global (a_0,...,a_{N-1}, b_0,...,b_{N-1})
-    axis_map_bra = {s: idx for idx, s in enumerate(systems)}
-    axis_map_ket = {s: k + idx for idx, s in enumerate(systems)}
-    for idx, c in enumerate(complement):
-        axis_map_bra[c] = 2 * k + 2 * idx
-        axis_map_ket[c] = 2 * k + 2 * idx + 1
+    axis_map_bra = {s: idx for idx, s in enumerate(sistema_tuple)}
+    axis_map_ket = {s: Ns + idx for idx, s in enumerate(sistema_tuple)}
+    for idx, c in enumerate(complemento):
+        axis_map_bra[c] = 2 * Ns + 2 * idx
+        axis_map_ket[c] = 2 * Ns + 2 * idx + 1
 
-    perm = [axis_map_bra[i] for i in range(N)] + [axis_map_ket[i] for i in range(N)]
+    perm = [axis_map_bra[i] for i in range(Nt)] + [axis_map_ket[i] for i in range(Nt)]
     res = np.transpose(res, perm)
-    d_total = int(np.prod(dims))
+    d_total = int(np.prod(dims_tuple))
     return res.reshape(d_total, d_total)
 
 
@@ -482,6 +520,10 @@ def verify_marginals(
         "purity": purity,
         "marginal_errors": marginal_errors,
     }
+
+
+# Alias em português para manter consistência com o notebook
+verifica_solucao = verify_marginals
 
 
 # ===========================================================================
