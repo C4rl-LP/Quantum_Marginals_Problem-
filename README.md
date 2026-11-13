@@ -12,7 +12,7 @@ para cada marginal prescrita `ω_S`. As igualdades são codificadas em uma base 
 
 ## Organização
 
-- `funcoes_fundamentais.py`: estados, traço parcial, embedding local, formulação/resolução do SDP, validação e geradores experimentais.
+- `modulos/`: estados, traço parcial, embedding local, formulação/resolução do SDP, validação e geradores experimentais.
 - `exemplos.ipynb`: primitivas e formulação.
 - `exemplos_propostos.ipynb`: exemplos de GHZ, marginais maximamente mistas e incompatibilidade de Bell.
 - `exemplos_mestura.ipynb`: família de misturas de Bell e varreduras numéricas.

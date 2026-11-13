@@ -17,7 +17,8 @@ As igualdades matriciais são codificadas em coordenadas de uma base Hermitiana 
 
 | Arquivo | Papel |
 | --- | --- |
-| `funcoes_fundamentais.py` | Núcleo computacional: álgebra matricial quântica, traço parcial, embedding local, SDP, solver, validação e geradores de exemplos. |
+| `modulos/` | Pacote reutilizável dividido em `estados.py`, `operadores.py`, `validacao.py`, `sdp.py` e `experimentos.py`; `__init__.py` expõe a API comum. |
+| `funcoes_fundamentais.py` | Camada temporária de compatibilidade que reexporta `modulos`; novos códigos devem importar do pacote. |
 | `exemplos.ipynb` | Introdução às primitivas e à formulação SDP. |
 | `exemplos_propostos.ipynb` | Casos de referência: GHZ, marginais maximamente mistas e marginais de Bell incompatíveis. |
 | `exemplos_mestura.ipynb` | Família `t Bell + (1-t) I/4`, varredura do parâmetro e estudo adicional de compatibilidade. |
@@ -41,6 +42,10 @@ As funções mais relevantes, na ordem aproximada do fluxo matemático, são:
 - `verify_marginals`: calcula erros de reconstrução, traço, hermiticidade, positividade e pureza.
 - `random_density_matrix`, `build_product_marginals`, `build_correlated_marginals`: geração de exemplos para experimentos.
 - `check_overlap_consistency`, `print_experiment_stats`: análise dos ensaios de compatibilidade.
+- `DualEntropico`, `otimizar_dual`: formulação/avaliação do dual entrópico e minimização de `-D` por L-BFGS-B.
+- `construir_restricoes_marginais`: expansão de marginais em observáveis globais, com remoção de dependências lineares compatíveis.
+
+As funções estão agrupadas por responsabilidade no pacote `modulos`. A função `_verify_density_matrix` é mantida para os notebooks legados, mas delega a `verifica_densidade` para evitar duplicação dos critérios de validade.
 
 ## Convenções matemáticas e de índices
 
@@ -76,6 +81,6 @@ As descrições e células documentais dos notebooks registram os seguintes resu
 
 1. Este guia e `AGENTS.md`.
 2. `README.md` para a síntese do escopo.
-3. `funcoes_fundamentais.py` para semântica real da implementação.
+3. `modulos/` para semântica real da implementação.
 4. `exemplos.ipynb` para as primitivas e a convenção do SDP.
 5. O notebook específico do fenômeno em estudo; consulte `exemplos_propostos.ipynb` para benchmarks compactos e os demais para experimentos.
