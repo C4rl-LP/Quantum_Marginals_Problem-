@@ -1,5 +1,7 @@
 # Estado atual
 
+Validações de entrada centralizadas em `modulos/validacoes.py` e integradas à classe `DualEntropico`, a `restricoes_lineares` e a `otimizar_dual`. Verificação pontual: 14 entradas inválidas rejeitadas, estado singular aceito, restrições em dimensões `(2, 3)` e reconstrução analítica de Ising. Essas verificações não revalidam as APIs e os testes históricos descritos abaixo.
+
 Última atualização: 2026-11-12.
 
 ## Objetivo
@@ -37,3 +39,9 @@ Há testes automatizados convencionais em `tests/test_dual_entropico.py`, execut
 - `modulos/` para semântica implementada.
 - `exemplos_propostos.ipynb` para benchmarks de referência.
 - Notebook específico para mistura, compatibilidade ou escalabilidade.
+
+## Atualização de 2026-11-13 — dual funcional
+
+A API de três funções em `dual_entropico.py` recebeu validações de operadores, vetores, epsilon, marginais e chaves; detecção de resultados não finitos; docstrings; alias do nome antigo da conversão; e reutilização da redução QR existente para eliminar dependências e rejeitar alvos redundantes incompatíveis. Mantida a exponencial não normalizada.
+
+Os oito testes de `tests/test_dual_funcional.py` passaram: gradiente por diferenças finitas com operadores não comutativos, reconstrução produto, sobreposição e dimensões não binárias, entradas inválidas, overflow e alias. A execução foi restrita à API funcional; os testes e consumidores da classe anterior não foram migrados nesta tarefa.

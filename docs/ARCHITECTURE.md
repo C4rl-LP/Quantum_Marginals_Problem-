@@ -14,6 +14,7 @@ flowchart LR
 
 ## Biblioteca `modulos`
 
+- `validacoes.py`: validadores reutilizáveis de escalares, vetores reais, operadores hermitianos, matrizes densidade, dimensões, subsistemas, marginais e parâmetros do dual/otimizador. Retornam cópias numéricas ou lançam `ValueError`. São chamados pelos três módulos de cálculo; não certificam compatibilidade global.
 - `estados.py`: vetores computacionais `zero` e `one`, construção de projetores e produtos tensoriais, GHZ e mistura convexa algébrica.
 - `operadores.py`: traço parcial, base Hermitiana, embedding local e interpretação das chaves de subsistemas.
 - `sdp.py`: montagem das igualdades na base Hermitiana e resolução pelo adaptador CVXPY/SDPLab.
@@ -41,3 +42,11 @@ O exemplo executável `exemplos/dual_entropico_dois_qubits.py` resolve o modelo 
 ## Testes e extensões
 
 Os testes automatizados de regressão ficam em `tests/`; os notebooks continuam sendo experimentos e demonstrações. Pontos sensíveis de extensão: ordenação tensorial, dimensões locais não binárias, traço parcial, embedding, representação das restrições SDP e interpretação de status/tolerâncias.
+
+## API funcional do dual entrópico (2026-11-13)
+
+O módulo `dual_entropico.py` agora expõe três funções: `estado_dual(u, H, Q, epsilon)`, `dual(u, H, Q, q, epsilon)` e `construir_restricoes_lineares(marginals_dict, dims=None)`. Esta descrição substitui as referências à classe nesse módulo. O nome anterior `Transformando_QMP_restricoes_lineares` é um alias da terceira função.
+
+O estado continua não normalizado e o dual mantém o regularizador `Tr(Gamma log(Gamma) - Gamma)`. As entradas são validadas quanto a formato, finitude, hermiticidade e comprimentos; resultados não finitos geram `OverflowError`. A conversão exige marginais PSD e de traço 1, com tolerância absoluta `1e-10`, e reutiliza `construir_restricoes_marginais` para embedding e redução QR. A normalização fica implicada pelas igualdades independentes; não é necessário manter a identidade como uma linha explícita. A remoção de redundâncias pode alterar a quantidade e a ordem dos multiplicadores. Sem `dims`, assume qubits.
+
+Validação isolada da API funcional: `python -m unittest discover -s tests -p test_dual_funcional.py -v`. A migração dos consumidores da classe antiga está fora do escopo desta alteração.
