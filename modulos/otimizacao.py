@@ -45,3 +45,21 @@ def otimizar_dual(
         "convergiu": resultado.success,
         "resultado_scipy": resultado
     }
+
+
+
+def gradient_descent(problema,u_0 : np.ndarray,learnrate:float,  maxinter =2000, tol = 1e-8,  ):
+    tau = learnrate
+    _, grad = problema.avaliar(u_0)
+    u_now = u_0
+    resudou = np.linalg.norm(grad)
+    for i in range(len(maxinter)):
+        
+        u_new = u_now - tau*grad
+        u_now = u_new
+        grad = problema.avaliar(u_new)
+        resudou = np.linalg.norm(grad)
+        if resudou < tol:
+            break
+
+    return u_new, 
