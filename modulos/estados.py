@@ -43,3 +43,17 @@ def mestura(rho_1, rho_2, t, dim=None):
     necessário para a combinação matricial.
     """
     return t * rho_1 + (1 - t) * rho_2
+
+def entropia_von_neumann(estado):
+    """Calcula a entropia de von Neumann em nats."""
+    autovalores = np.linalg.eigvalsh(estado)
+    positivos = autovalores[autovalores > 0]
+    return float(-np.sum(positivos * np.log(positivos)))
+
+
+def negatividade(estado):
+    """Negatividade do estado bipartido, transpondo o segundo qubit."""
+    matriz = np.asarray(estado).reshape(2, 2, 2, 2)
+    transposta_parcial = matriz.transpose(0, 3, 2, 1).reshape(4, 4)
+    autovalores = np.linalg.eigvalsh(transposta_parcial)
+    return float(np.abs(autovalores[autovalores < 0]).sum())

@@ -1,5 +1,9 @@
 __pycache__/
-.venv/
+*.venv/
 venv/
-.env/
+*.env/
 env/
+*.egg-info/
+build/
+dist/
+qutip_coeffs_*/

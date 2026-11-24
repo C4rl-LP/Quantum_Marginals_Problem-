@@ -1,19 +1,33 @@
 import numpy as np
-from scipy.optimize import minimize
 from .validacoes import (
     validar_escalar_positivo,
     validar_parametros_otimizacao,
-    validar_vetor_real,
 )
 
 
 def otimizar_dual(
-    problema,
+    problema: "DualEntropico",
     u_inicial=None,
     tolerancia=1e-8,
-    maxiter=2000
+    maxiter=2000,
+    metodo="gradient",
+    salvar_matriz_densidade=True,
+    **kwargs
 ):
     """Maximiza o funcional dual entrópico."""
+
+    maximizadores = {
+        "gradient": gradient_acendent,
+        "stochastic": gradient_acendent_sthocastical
+    }
+
+    if metodo not in maximizadores:
+        raise ValueError(
+            f"Método '{metodo}' desconhecido. "
+            f"Métodos disponíveis: {list(maximizadores)}"
+        )
+
+    maximizador = maximizadores[metodo]
 
     if u_inicial is None:
         u_inicial = np.zeros(len(problema.Q))
@@ -21,34 +35,32 @@ def otimizar_dual(
         u_inicial, len(problema.Q), tolerancia, maxiter
     )
 
-    def objetivo(u):
-        valor, gradiente = problema.avaliar(u)
-        return -valor, -gradiente
 
-    resultado = minimize(
-        objetivo,
-        u_inicial,
-        method="L-BFGS-B",
-        jac=True,
-        options={
-            "maxiter": maxiter,
-            "gtol": tolerancia
-        }
+    u_otimo, historico = maximizador(
+        problema,
+        u_0=u_inicial,
+        maxinter=maxiter,
+        tol=tolerancia,
+        **kwargs
     )
-
-    u_otimo = resultado.x
-    gamma = problema.estado(u_otimo)
     valor_dual, gradiente = problema.avaliar(u_otimo)
     residuos = -gradiente
-
-    return {
+    norma_residuos = float(np.linalg.norm(residuos))
+    residuo_maximo = float(np.linalg.norm(residuos, ord=np.inf))
+    resultado = {
+        "metodo": metodo,
         "multiplicadores": u_otimo,
-        "estado": gamma,
         "valor_dual": valor_dual,
+        "gradiente": gradiente,
         "residuos": residuos,
-        "convergiu": resultado.success,
-        "resultado_scipy": resultado
+        "norma_residuos": norma_residuos,
+        "residuo_maximo": residuo_maximo,
+        "convergiu": norma_residuos < tolerancia,
+        "historico": historico
     }
+    if salvar_matriz_densidade:
+        resultado["estado"] = problema.estado(u_otimo)
+    return resultado
 
 
 
