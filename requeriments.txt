@@ -1,1 +1,1 @@
-pip install numpy scipy pandas 
+pip install numpy scipy pandas matplotlib QuTip

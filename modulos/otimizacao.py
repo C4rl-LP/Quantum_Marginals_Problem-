@@ -1,6 +1,10 @@
 import numpy as np
 from scipy.optimize import minimize
-from .validacoes import validar_parametros_otimizacao
+from .validacoes import (
+    validar_escalar_positivo,
+    validar_parametros_otimizacao,
+    validar_vetor_real,
+)
 
 
 def otimizar_dual(
@@ -48,18 +52,70 @@ def otimizar_dual(
 
 
 
-def gradient_descent(problema,u_0 : np.ndarray,learnrate:float,  maxinter =2000, tol = 1e-8,  ):
-    tau = learnrate
-    _, grad = problema.avaliar(u_0)
-    u_now = u_0
-    resudou = np.linalg.norm(grad)
-    for i in range(len(maxinter)):
-        
-        u_new = u_now - tau*grad
-        u_now = u_new
-        grad = problema.avaliar(u_new)
-        resudou = np.linalg.norm(grad)
-        if resudou < tol:
-            break
+def gradient_acendent(
+    problema, u_0: np.ndarray = None, learnrate: float = 1e-2,
+    maxinter: int = 2000, tol: float = 1e-8,
+):
+    """Maximiza o dual por subida de gradiente em todas as coordenadas.
 
-    return u_new, 
+    O histórico contém pares (valor_dual, norma_do_gradiente), avaliados
+    antes de cada atualização.
+    """
+    quantidade = len(problema.q)
+    if u_0 is None:
+        u_0 = np.zeros(quantidade, dtype=float)
+    u, tol, maxinter = validar_parametros_otimizacao(
+        u_0, quantidade, tol, maxinter
+    )
+    tau = validar_escalar_positivo(learnrate, "learnrate")
+    historico = []
+
+    for _ in range(maxinter):
+        valor, grad = problema.avaliar(u)
+        residuo = float(np.linalg.norm(grad))
+        historico.append((valor, residuo))
+        if residuo < tol:
+            break
+        u += tau * grad
+
+    return u, historico
+
+
+def gradient_acendent_sthocastical(
+    problema, u_0: np.ndarray = None, dim_choice: int = 1,
+    learnrate: float = 1e-2, step_check: int = 100,
+    maxinter: int = 2000, tol: float = 1e-8,
+):
+   
+    quantidade = len(problema.q)
+    if isinstance(dim_choice, (bool, np.bool_)) or not isinstance(dim_choice, (int, np.integer)) or not 1 <= dim_choice <= quantidade:
+        raise ValueError("dim_choice deve ser um inteiro entre 1 e len(problema.q).")
+    if isinstance(step_check, (bool, np.bool_)) or not isinstance(step_check, (int, np.integer)) or step_check <= 0:
+        raise ValueError("step_check deve ser um inteiro positivo.")
+    if u_0 is None:
+        u_0 = np.zeros(quantidade, dtype=float)
+    u, tol, maxinter = validar_parametros_otimizacao(
+        u_0, quantidade, tol, maxinter
+    )
+
+    tau = validar_escalar_positivo(learnrate, "learnrate")
+    
+    indices = np.arange(quantidade)
+    historico = []
+
+    for i in range(maxinter):
+        
+        if i % step_check == 0:
+            valor, grad_completo = problema.avaliar(u)
+            residuo_completo = float(np.linalg.norm(grad_completo))
+            if residuo_completo < tol:
+                historico.append((valor, residuo_completo))
+                break
+
+        mask = np.random.choice(indices, size=dim_choice, replace=False)
+        valor, grad = problema.avaliar(u, mask)
+        residuo = float(np.linalg.norm(grad))
+        historico.append((valor, residuo))
+        u[mask] += tau * grad
+
+    return u, historico

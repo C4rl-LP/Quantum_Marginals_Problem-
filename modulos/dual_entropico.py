@@ -17,17 +17,18 @@ class DualEntropico:
 
         return expm(A / self.epsilon)
 
-    def avaliar(self, u):
+    def avaliar(self, u, mask = None):
         Gamma = self.estado(u)
 
         valor = (
             np.dot(u, self.q)
             - self.epsilon * np.trace(Gamma).real
         )
-
+        if mask == None:
+            mask = np.arange(len(self.q))
         gradiente = np.array([
-            qi - np.trace(Qi @ Gamma).real
-            for qi, Qi in zip(self.q, self.Q)
+            self.q[i] - np.trace(self.Q[i] @ Gamma).real
+            for i in mask
         ])
         return valor, gradiente
 
