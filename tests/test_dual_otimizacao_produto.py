@@ -16,7 +16,7 @@ class TestOtimizacaoDualProduto(unittest.TestCase):
 
         rho_a = np.diag([0.7, 0.3]).astype(complex)
         rho_b = np.array([[0.6, 0.1], [0.1, 0.4]], dtype=complex)
-        
+
         # Impõe o traço global e as três componentes locais de cada qubit.
         operadores = [np.eye(4, dtype=complex)]
         operadores.extend(np.kron(sigma, identidade) for sigma in paulis)
