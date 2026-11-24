@@ -45,10 +45,6 @@ def hamiltoniano_bilinear(
 
     return hamiltoniano
 
-
-
-
-
 def dimensoes_qubits(N):
     if isinstance(N, (bool, np.bool_)) or not isinstance(N, (int, np.integer)) or N < 2:
         raise ValueError("N deve ser um inteiro maior ou igual a 2.")
