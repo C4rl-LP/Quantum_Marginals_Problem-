@@ -1,67 +1,88 @@
-# Módulos do pacote `modulos`
+# Módulos do problema das marginais quânticas
 
-Este diretório contém a implementação reutilizável para estados quânticos multipartidos, marginais, formulações de otimização e diagnósticos. O código é a referência para a semântica descrita aqui. `funcoes_fundamentais.py` reexporta os nomes de `modulos` por compatibilidade com consumidores antigos.
+O pacote `modulos` reúne operações sobre estados e Hamiltonianos, construção
+das restrições marginais, otimização e visualização. Os scripts em `tests/`
+escolhem os parâmetros físicos, os pontos das varreduras e os arquivos de saída.
 
-## Mapa dos arquivos
+## Mapa dos módulos
 
-| Módulo | Responsabilidade | Símbolos principais |
-|---|---|---|
-| `estados.py` | Estados computacionais, projetores, produtos tensoriais, GHZ e mistura algébrica. | `zero`, `one`, `basis`, `ketbra`, `tensor`, `ghz`, `mestura` |
-| `operadores.py` | Redução parcial, base de operadores hermitianos, embedding e interpretação de chaves. | `partial_trace`, `base_hermitiana`, `embed_operator`, `parse_subsystem_key` |
-| `validacoes.py` | Validação rigorosa de dimensões, subsistemas, matrizes densidade, dados do dual e parâmetros de otimização. | `validar_escalar_positivo`, `validar_vetor_real`, `validar_hermitiana`, `validar_densidade`, `validar_dimensoes`, `validar_subsistema`, `validar_marginais`, `validar_dados_dual`, `validar_parametros_otimizacao` |
-| `validacao.py` | Diagnósticos numéricos de estados e de marginais reconstruídas. | `verifica_densidade`, `_verify_density_matrix`, `verify_marginals` |
-| `marginais.py` | Codificação de marginais prescritas como igualdades lineares globais. | `restricoes_lineares` |
-| `sdp.py` | Construção e resolução do SDP de extensão global. | `build_qmp_sdp`, `solve_qmp` |
-| `dual_entropico.py` | Estado exponencial, funcional dual entrópico, gradiente e resíduos. | `DualEntropico` |
-| `otimizacao.py` | Algoritmos para maximizar o dual entrópico. | `otimizar_dual`, `gradient_acendent`, `gradient_acendent_sthocastical` |
-| `experimentos.py` | Geração de estados/marginais aleatórios e resumo de experimentos de compatibilidade. | `random_density_matrix`, `build_product_marginals`, `build_correlated_marginals`, `check_overlap_consistency`, `print_experiment_stats` |
-| `__init__.py` | Fachada de imports sob demanda. | nomes listados em `__all__` |
+| Módulo | Responsabilidade | Funções principais |
+| --- | --- | --- |
+| `estados.py` | Construção de estados e cálculo de propriedades. | `basis`, `ketbra`, `tensor`, `ghz`, `mestura`, `estado_fundamental`, `estado_gibbs`, `estado_termico_oscilador`, `entropia_von_neumann`, `negatividade` |
+| `Hamiltoniano_ex.py` | Hamiltonianos de osciladores e de cadeias abertas. | `hamiltoniano_oscilador`, `hamiltoniano_bilinear`, `Hamiltoniano_ZZ`, `Hamiltoniano_XY`, `dimensoes_qubits` |
+| `operadores.py` | Operações locais e multipartidas. | `partial_trace`, `embed_operator`, `base_hermitiana`, `parse_subsystem_key`, `operador_posicao`, `momentos_observaveis_locais` |
+| `marginais.py` | Reduções de estados e construção das igualdades marginais. | `reduzir_marginais`, `restricoes_lineares` |
+| `validacoes.py` | Validação das entradas numéricas. | `validar_dimensoes`, `validar_densidade`, `validar_marginais`, `validar_dados_dual` |
+| `validacao.py` | Comparação entre reduções e marginais prescritas e diagnóstico físico do estado. | `comparar_marginais`, `verify_marginals`, `verifica_densidade` |
+| `sdp.py` | Formulação e resolução da factibilidade por SDP. | `build_qmp_sdp`, `solve_qmp` |
+| `dual_entropico.py` | Formulações exponencial e logarítmica do dual. | `DualEntropico` |
+| `otimizacao.py` | Maximização do dual e varreduras numéricas. | `otimizar_dual`, `gradient_acendent`, `gradient_acendent_sthocastical`, `varrer_dual`, `varrer_taxas_dual` |
+| `diagnosticos_reconstrucao.py` | Estimativas espectrais e certificados de incompatibilidade. | `gap_espectral`, `cota_frobenius`, `avaliar_testemunha` |
+| `visualizacao.py` | Wigner, densidade de posições, matrizes e gráficos de resíduos. | `wigner_marginal`, `cortes_wigner`, `visualizar_marginais`, `distribuicao_conjunta_posicoes`, `visualizar_posicoes_conjuntas`, `visualizar_matriz_densidade`, `visualizar_taxas_dual`, `salvar_figura` |
+| `experimentos.py` | Geradores aleatórios e resumos de estudos de compatibilidade. | `random_density_matrix`, `build_product_marginals`, `build_correlated_marginals`, `check_overlap_consistency`, `print_experiment_stats` |
 
-## Convenções
+## Estados e marginais
 
-- A ordem dos sistemas é a ordem dos fatores no produto tensorial. Em três qubits, `A=0`, `B=1`, `C=2`; uma matriz para `AB` usa essa ordem. `dims` lista as dimensões locais na mesma ordem.
-- `partial_trace(rho, keep=..., dims=...)` mantém os índices indicados; alternativamente, use `trace_out`. Informe exatamente um dos dois argumentos. Se `dims` for omitido, algumas funções inferem um sistema de qubits.
-- `base_hermitiana(d)` retorna `d²` matrizes ortonormais no produto de Hilbert–Schmidt. `embed_operator(O, sistema, dims=...)` insere identidades nos fatores que não pertencem ao subsistema.
-- As funções em `validacoes.py` rejeitam entradas inválidas com `ValueError` e retornam cópias numéricas. Validar cada marginal localmente não demonstra que exista uma extensão global.
-- Os diagnósticos em `validacao.py` informam erros e propriedades numéricas. Tolerâncias são critérios computacionais, não certificados exatos.
+`dims` segue a ordem dos fatores tensoriais. Em três qubits, A, B e C
+correspondem aos índices 0, 1 e 2. `partial_trace` recebe exatamente um entre
+`keep` e `trace_out`. A base de `base_hermitiana(d)` é ortonormal no produto
+de Hilbert–Schmidt.
 
-## Fluxos de uso
+`estado_termico_oscilador(dimensao, temperatura, omega)` usa o Hamiltoniano
+local de Fock truncado e retorna a matriz de Gibbs com temperatura inversa
+(1/T), em unidades com (k_B=1). A temperatura local é independente do
+parâmetro de regularização ε. `negatividade` mede a bipartição entre o
+primeiro qubit e o restante do sistema.
 
-### Marginais e SDP
+`reduzir_marginais(estado, sistemas, dims)` retorna as matrizes reduzidas
+indexadas pelas chaves fornecidas. `comparar_marginais(estado, marginais, dims)`
+retorna, por chave, a redução, o alvo, a norma de Frobenius e o maior erro
+absoluto de entrada. `verify_marginals` acrescenta o diagnóstico do estado
+global, incluindo traço, espectro e pureza. Seu campo histórico
+`is_feasible` informa se uma matriz foi fornecida.
 
-`restricoes_lineares(marginals_dict, dims)` retorna `(M, b)`, representando as igualdades `Tr(M[i] @ rho) = b[i]`; inclui a normalização do traço e valida as marginais. Para a interface SDPLab, `build_qmp_sdp(marginals_dict, dims=None, include_trace_norm=True, ctx=None)` retorna o problema e os arrays `(M, b)`. `solve_qmp(sdp, solver="CLARABEL", ...)` retorna um dicionário com `status`, `is_feasible`, `rho`, `dual_y`, `problem` e `error_message`.
+## Otimização e diagnóstico
 
-O status do solver é um resultado numérico. Quando `rho` estiver disponível, use `verify_marginals` para examinar traço, hermiticidade, menor autovalor e erro de cada redução. `verify_marginals` retorna `is_feasible=True` quando uma matriz foi fornecida; esse campo não substitui a inspeção dos outros diagnósticos.
+`restricoes_lineares(marginais, dims)` retorna `(Q, q)` para as igualdades
+`Tr(Q[i] @ estado) = q[i]`, incluindo a normalização. A alternativa por SDP
+usa `build_qmp_sdp` e `solve_qmp`, cujo resultado inclui status, estado e
+multiplicadores quando disponíveis. A validação local das marginais e a
+consistência no sistema compartilhado podem ser verificadas antes do SDP.
 
-### Dual entrópico
+`DualEntropico(H, Q, q, epsilon, forma=...)` calcula o estado exponencial
+ou, na forma `"logaritmico"`, o estado normalizado por Log-Sum-Exp.
+`avaliar(u)` retorna o valor dual e o gradiente
+`q[i] - Tr(Q[i] @ estado)`. `residuos(u)` retorna o sinal oposto.
 
-`DualEntropico(H, Q, q, epsilon)` recebe um Hamiltoniano hermitiano `H`, uma sequência de observáveis globais hermitianos `Q`, alvos reais `q` e regularização positiva `epsilon`. `estado(u)` calcula
+`otimizar_dual` usa subida de gradiente, com os métodos `"gradient"` e
+`"stochastic"`. Retorna multiplicadores, valor dual, gradiente, resíduos,
+histórico e convergência pela tolerância. A matriz de estado é incluída por
+padrão.
 
-$$\Gamma_u = \exp\!\left((\sum_i u_i Q_i-H)/\epsilon\right).$$
+- `varrer_dual(criar_problema, epsilons, fator_learnrate=..., ...)` gera um
+  resultado por ε, na ordem fornecida, inclusive sem convergência. O passo
+  é `fator_learnrate * epsilon`. A inicialização pode ser um vetor, uma
+  função do problema ou zero por padrão. Com
+  `reutilizar_multiplicadores=True`, os pontos seguintes começam com a solução
+  numérica do ponto anterior.
+- `varrer_taxas_dual(criar_problema, epsilons, fatores, ...)` retorna uma
+  matriz com os resíduos finais, com uma linha por fator e uma coluna por ε.
+- `gap_espectral(H)` retorna a diferença entre os dois menores autovalores
+  com multiplicidade. `cota_frobenius(epsilons, gap, marginais)` usa a soma
+  das entropias prescritas. A interpretação como cota vale para a solução
+  ótima factível com referência fundamental pura e gap positivo.
+- `avaliar_testemunha(W, alvo)` retorna o maior autovalor de (W) e a
+  diferença entre o alvo e esse máximo. Uma diferença positiva certifica
+  que o alvo é inalcançável por um estado normalizado.
 
-O estado retornado é não normalizado. `avaliar(u)` retorna o valor dual e o gradiente `q_i - Tr(Q_i Gamma_u)`; `residuos(u)` retorna o sinal oposto, `Tr(Q_i Gamma_u)-q_i`. Opcionalmente, `avaliar(u, mask=...)` calcula o gradiente somente para os índices selecionados, embora ainda avalie o estado completo.
+## Visualização e imports
 
-`otimizar_dual` usa L-BFGS-B para minimizar o negativo do dual e retorna multiplicadores, estado, valor, resíduos, indicação de convergência e o resultado original do SciPy. `gradient_acendent` e `gradient_acendent_sthocastical` implementam alternativas por subida de gradiente; a segunda escolhe aleatoriamente coordenadas em cada passo. A convergência do algoritmo e a magnitude dos resíduos devem ser avaliadas separadamente.
+`visualizar_posicoes_conjuntas` e `visualizar_taxas_dual` retornam a figura
+e o eixo. `visualizar_matriz_densidade` desenha a parte real em um eixo
+fornecido e aceita rótulos para a base. `salvar_figura(figura, caminho, dpi=...)`
+cria o diretório de destino, grava e fecha a figura e retorna o caminho.
 
-### Experimentos
-
-`random_density_matrix(d, rng=None)` gera uma matriz densidade aleatória (o gerador opcional permite controlar a aleatoriedade). `build_product_marginals` cria marginais de produto; `build_correlated_marginals` constrói exemplos correlacionados. `check_overlap_consistency` verifica consistência entre marginais sobrepostas e `print_experiment_stats` resume um DataFrame de resultados. Esses geradores apoiam experimentos e não provam afirmações gerais sobre compatibilidade.
-
-## Imports
-
-Para reduzir dependências incidentais, prefira importar do submódulo que contém a função:
-
-```python
-from modulos.operadores import partial_trace
-from modulos.marginais import restricoes_lineares
-from modulos.validacao import verify_marginals
-from modulos.sdp import build_qmp_sdp, solve_qmp
-```
-
-O pacote também oferece uma fachada com carregamento sob demanda, por exemplo `from modulos import partial_trace`. O módulo `sdp` depende de `spacecore`, `sdplab` e do adaptador CVXPY; as primitivas de `operadores.py` não precisam carregar essas dependências. As rotinas de otimização usam SciPy; experimentos usam Pandas.
-
-**Nota sobre a fachada:** no estado atual do código, `_EXPORTS` em `__init__.py` registra `RestricoesMarginais` e `construir_restricoes_marginais`, enquanto `marginais.py` define `restricoes_lineares`; essa correspondência precisa ser reconciliada antes de usar aqueles dois nomes pela fachada. Este guia recomenda o import direto mostrado acima. Também há alegações sobre uma API funcional de três funções em documentos locais que divergem do `dual_entropico.py` atual, cuja implementação é a classe `DualEntropico`.
-
-## Limites e manutenção
-
-O pacote cobre implementação numérica, não uma prova matemática geral. A ordenação dos tensores, o mapeamento das chaves, o pareamento usado pelo SDPLab e os diagnósticos de factibilidade são pontos sensíveis. Ao alterar essas convenções, confira `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` e os consumidores em notebooks/testes. O manifesto de dependências e a execução integral dos notebooks não estão estabelecidos por esta documentação.
+Prefira importar diretamente dos submódulos. O carregamento sob demanda de
+`modulos/__init__.py` também oferece alguns nomes históricos, como
+`partial_trace`. O módulo `sdp` usa SDPLab, SpaceCore e o adaptador CVXPY.
+A visualização usa Matplotlib e SciPy e carrega QuTiP para a Wigner de um modo.

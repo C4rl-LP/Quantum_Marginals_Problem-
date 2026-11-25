@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from operator import index
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -83,6 +84,26 @@ def wigner_marginal(
     return wigner_conjunta.real
 
 
+def cortes_wigner(
+    rho: np.ndarray,
+    grade: np.ndarray,
+    keep: Sequence[int],
+    dims: Sequence[int] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Retorna os cortes de posição e de momento da Wigner conjunta de dois modos.
+
+    O corte de posição fixa os momentos em zero e o de momento fixa as
+    posições em zero. Em cada matriz, as colunas correspondem ao primeiro
+    modo retido na ordem de dims e as linhas ao segundo.
+    """
+    if len(keep) != 2:
+        raise ValueError("Informe dois subsistemas distintos e válidos.")
+
+    posicoes = wigner_marginal(rho, grade, [0.0], keep=keep, dims=dims)
+    momentos = wigner_marginal(rho, [0.0], grade, keep=keep, dims=dims)
+    return posicoes[0, :, 0, :].T, momentos[:, 0, :, 0].T
+
+
 def _base_posicao(dim: int, x: np.ndarray) -> np.ndarray:
     """Avalia as funções de onda normalizadas dos níveis de Fock."""
     base = np.empty((dim, x.size))
@@ -141,3 +162,53 @@ def visualizar_marginais(
 
     fig.tight_layout()
     return fig, axes[0]
+
+
+def salvar_figura(figura, caminho, *, dpi=200):
+    """Cria a pasta de destino, grava e fecha a figura e retorna o caminho."""
+    caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    figura.savefig(caminho, dpi=dpi, facecolor="white")
+    plt.close(figura)
+    return caminho
+
+
+def visualizar_matriz_densidade(eixo, matriz, titulo, *, base=None, vmax=0.5):
+    """Desenha a parte real da matriz quadrada com anotações na base fornecida."""
+    matriz = np.asarray(matriz)
+    if matriz.ndim != 2 or matriz.shape[0] != matriz.shape[1]:
+        raise ValueError("A matriz deve ser quadrada.")
+    indices = range(len(matriz))
+    base = tuple(indices) if base is None else tuple(base)
+    imagem = eixo.imshow(matriz.real, vmin=0, vmax=vmax, cmap="Blues")
+    eixo.set(xticks=indices, yticks=indices, xticklabels=base, yticklabels=base, title=titulo)
+    eixo.tick_params(length=0, labelsize=10)
+    for i, j in np.ndindex(matriz.shape):
+        valor = matriz[i, j].real
+        eixo.text(j, i, f"{valor:.3f}".replace(".", ","), ha="center", va="center",
+                  color="white" if valor > 0.64 * vmax else "black", fontsize=9)
+    return imagem
+
+
+def visualizar_posicoes_conjuntas(rho, grade, sistemas, dims, *, titulo=None):
+    """Retorna a figura e o eixo da densidade conjunta de posição de dois modos."""
+    densidade = distribuicao_conjunta_posicoes(rho, grade, sistemas, dims)
+    figura, eixo = plt.subplots(figsize=(6, 5), layout="constrained")
+    imagem = eixo.contourf(grade, grade, densidade.T, levels=40, cmap="viridis")
+    i, j = sorted(sistemas)
+    eixo.set(aspect="equal", xlabel=rf"$x_{i}$", ylabel=rf"$x_{j}$", title=titulo)
+    figura.colorbar(imagem, ax=eixo, label=rf"$P(x_{i}, x_{j})$")
+    return figura, eixo
+
+
+def visualizar_taxas_dual(epsilons, fatores, residuos, *, tolerancia, titulo):
+    """Retorna figura e eixo com os resíduos finais por fator de aprendizado."""
+    figura, eixo = plt.subplots(figsize=(9, 5), layout="constrained")
+    for fator, erros in zip(fatores, residuos):
+        eixo.loglog(epsilons, erros, marker="o", markersize=4, label=f"{fator:g}")
+    eixo.axhline(tolerancia, color="0.4", linestyle="--", label="Tolerância")
+    eixo.set(xlabel=r"Regularização $\epsilon$",
+             ylabel=r"Norma do resíduo final $\|r\|_2$", title=titulo)
+    eixo.grid(alpha=0.25, which="both")
+    eixo.legend(title=r"Taxa $c\epsilon$", ncols=2)
+    return figura, eixo

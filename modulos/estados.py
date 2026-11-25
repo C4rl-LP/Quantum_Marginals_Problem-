@@ -35,6 +35,15 @@ def estado_gibbs(H: np.ndarray, beta: float) -> np.ndarray:
     return (vetores * pesos) @ vetores.conj().T
 
 
+def estado_termico_oscilador(dimensao, temperatura=1.0, omega=1.0):
+    """Retorna o Gibbs local do oscilador em unidades com k_B = 1."""
+    from .Hamiltoniano_ex import hamiltoniano_oscilador
+    from .validacoes import validar_escalar_positivo
+
+    temperatura = validar_escalar_positivo(temperatura, "temperatura local")
+    return estado_gibbs(hamiltoniano_oscilador(dimensao, omega), beta=1 / temperatura)
+
+
 def tensor(*args: np.ndarray) -> np.ndarray:
     """Calcula o produto de Kronecker na mesma ordem dos argumentos."""
     resultado = args[0]
@@ -68,8 +77,15 @@ def entropia_von_neumann(estado):
 
 
 def negatividade(estado):
-    """Negatividade do estado bipartido, transpondo o segundo qubit."""
-    matriz = np.asarray(estado).reshape(2, 2, 2, 2)
-    transposta_parcial = matriz.transpose(0, 3, 2, 1).reshape(4, 4)
+    """Retorna a negatividade na bipartição do primeiro qubit e o restante."""
+    estado = np.asarray(estado)
+    if estado.ndim != 2 or estado.shape[0] != estado.shape[1]:
+        raise ValueError("estado deve ser uma matriz quadrada.")
+    tamanho = estado.shape[0]
+    if tamanho < 4 or tamanho % 2 != 0:
+        raise ValueError("estado deve ter dimensão compatível com a bipartição 2 × d, d >= 2.")
+    resto = tamanho // 2
+    matriz = estado.reshape(2, resto, 2, resto)
+    transposta_parcial = matriz.transpose(0, 3, 2, 1).reshape(tamanho, tamanho)
     autovalores = np.linalg.eigvalsh(transposta_parcial)
     return float(np.abs(autovalores[autovalores < 0]).sum())

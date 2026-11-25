@@ -1,5 +1,6 @@
 """Reconstrói o estado fundamental de dois osciladores a partir das marginais."""
 
+import argparse
 import hashlib
 import json
 import sys
@@ -9,25 +10,19 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Parâmetros do experimento: altere estes valores para modificar o exemplo.
-dims = (4, 4)
-omega = 1.0
-g = 0.5
-epsilons = np.geomspace(0.1, 0.1, 1)  # inclui epsilon = 0.1
-epsilon_visualizacao = .1
-pares_interacao = [(0, 1, g)]
+# Permite executar o arquivo diretamente ou via python -m.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-PASTA_EXPERIMENTO = Path(__file__).resolve().parent
-ROOT = PASTA_EXPERIMENTO.parents[2]
-sys.path.insert(0, str(ROOT))
+from modulos.diagnosticos_reconstrucao import cota_frobenius, gap_espectral
+from modulos.estados import entropia_von_neumann
+from modulos.visualizacao import visualizar_marginais, visualizar_posicoes_conjuntas
+from tests.potencial_harmonico.experimento_1.base import (
+    DIMENSOES, FATOR_LEARNRATE, MAXITER, METODO, MODOS, OMEGA, PASTA, TOLERANCIA,
+    ExperimentoHarmonico,
+)
 
-from modulos.Hamiltoniano_ex import hamiltoniano_bilinear
-from modulos.dual_entropico import DualEntropico
-from modulos.estados import entropia_von_neumann, estado_fundamental
-from modulos.marginais import restricoes_lineares
-from modulos.operadores import momentos_observaveis_locais, operador_posicao, partial_trace
-from modulos.otimizacao import otimizar_dual
-from modulos.visualizacao import distribuicao_conjunta_posicoes, visualizar_marginais
+from tests.potencial_harmonico.experimento_1.figuras import salvar
 
 
 def _acrescentar(caminho, titulo, campos):
@@ -72,38 +67,73 @@ def registrar_resultado(caminho, resultado, marginais_reconstruidas, **campos):
     })
 
 
-if __name__ == "__main__":
-    configuracao = {
-        "dims": dims,
-        "omega": omega,
-        "pares_interacao": pares_interacao,
-        "metodo": "gradient",
-        "tolerancia": 1e-6,
-        "maxiter": 10000,
-        "fator_learnrate": 0.1,
-    }
-    H = hamiltoniano_bilinear(dims, omega, pares_interacao)
-    energia_fundamental, gamma0 = estado_fundamental(H)
+def figura_frobenius():
+    """Grava a varredura da distância de Frobenius e retorna o caminho do PNG."""
+    experimento = ExperimentoHarmonico()
+    gap = gap_espectral(experimento.H)
 
-    marginais = {
-        (i,): partial_trace(gamma0, keep=(i,), dims=dims)
-        for i in range(len(dims))
+    epsilons = np.geomspace(0.01, 1, 21)
+    distancias = np.empty_like(epsilons)
+    convergiu = np.empty(epsilons.size, dtype=bool)
+    for i, resultado in enumerate(experimento.varrer(epsilons, "logaritmico")):
+        distancias[i] = np.linalg.norm(resultado["estado"] - experimento.estado, ord="fro")
+        convergiu[i] = resultado["convergiu"]
+
+    figura, eixo = plt.subplots(figsize=(7.4, 4.5), layout="constrained")
+    eixo.loglog(epsilons, distancias, ".-", label="Reconstrução")
+    eixo.loglog(
+        epsilons, cota_frobenius(epsilons, OMEGA, experimento.marginais), "--",
+        label=rf"Estimativa com $\omega={OMEGA:g}$",
+    )
+    eixo.loglog(
+        epsilons, cota_frobenius(epsilons, gap, experimento.marginais), ":",
+        label=rf"Cota com o gap $\Delta={gap:.3f}$",
+    )
+    if not convergiu.all():
+        eixo.scatter(
+            epsilons[~convergiu], distancias[~convergiu], marker="x", color="C0",
+            label=rf"Resíduo $\geq {TOLERANCIA:g}$",
+        )
+    eixo.set(
+        xlabel=r"Regularização $\varepsilon$",
+        ylabel=r"Distância $\|\Gamma_\varepsilon-\Gamma_0\|_F$",
+        title="Reconstrução do estado fundamental",
+    )
+    eixo.grid(alpha=0.25)
+    eixo.legend()
+    return salvar(figura, "distancia_frobenius")
+
+
+def main():
+    """Exibe as figuras da reconstrução e acrescenta os dados ao protocolo."""
+    epsilons = np.array([0.1])
+    epsilon_visualizacao = 0.1
+    experimento = ExperimentoHarmonico()
+    configuracao = {
+        "dims": DIMENSOES,
+        "omega": OMEGA,
+        "pares_interacao": experimento.pares_interacao,
+        "metodo": METODO,
+        "tolerancia": TOLERANCIA,
+        "maxiter": MAXITER,
+        "fator_learnrate": FATOR_LEARNRATE,
     }
-    Q, q = restricoes_lineares(marginais, dims)
-    sistemas_posicao = (0, 1)
-    posicoes = tuple(operador_posicao(dims[i]) for i in sistemas_posicao)
-    momentos_fundamental = momentos_observaveis_locais(gamma0, dims, sistemas_posicao, posicoes)
+    H = experimento.H
+    energia_fundamental, gamma0 = experimento.energia, experimento.estado
+    marginais = experimento.marginais
+    momentos_fundamental = experimento.momentos_posicao(gamma0)
     correlacao_fundamental = momentos_fundamental["covariancia"]
     pearson_fundamental = momentos_fundamental["pearson"]
     caminho_protocolo = iniciar_protocolo(
-        PASTA_EXPERIMENTO / "protocolos", "Experimento_1", "Experimento 1",
+        PASTA / "protocolos", "Experimento_1", "Experimento 1",
         configuracao, epsilons, marginais,
         inicializacao="Zero no primeiro ε, multiplicadores anteriores nos demais",
         regra_learnrate="fator_learnrate * epsilon",
         energia_fundamental=energia_fundamental,
         correlacao_fundamental=correlacao_fundamental,
         pearson_fundamental=pearson_fundamental,
-        Hamiltoniano=H, estado_fundamental=gamma0, Q=np.asarray(Q), q=np.asarray(q),
+        Hamiltoniano=H, estado_fundamental=gamma0,
+        Q=np.asarray(experimento.Q), q=np.asarray(experimento.q),
     )
     medidas = (
         ("Energia ⟨H⟩", energia_fundamental),
@@ -117,18 +147,10 @@ if __name__ == "__main__":
     dados = []
     u_inicial = None
     estado_visualizacao = None
-    for epsilon in epsilons:
-        problema = DualEntropico(H, Q, q, epsilon)
-        learnrate = configuracao["fator_learnrate"] * epsilon
-        multiplicadores_iniciais = np.zeros(len(Q)) if u_inicial is None else u_inicial.copy()
-        resultado = otimizar_dual(
-            problema,
-            u_inicial=u_inicial,
-            metodo=configuracao["metodo"],
-            tolerancia=configuracao["tolerancia"],
-            maxiter=configuracao["maxiter"],
-            learnrate=learnrate,
-        )
+    resultados = experimento.varrer(epsilons, "exponencial", reutilizar_multiplicadores=True)
+    for epsilon, resultado in zip(epsilons, resultados):
+        learnrate = FATOR_LEARNRATE * epsilon
+        multiplicadores_iniciais = np.zeros(len(experimento.Q)) if u_inicial is None else u_inicial.copy()
         u_inicial = resultado["multiplicadores"]
         gamma = resultado["estado"]
         energia_reconstruida = np.trace(H @ gamma).real
@@ -136,7 +158,7 @@ if __name__ == "__main__":
         entropia = entropia_von_neumann(gamma)
         distancia = np.linalg.norm(gamma - gamma0, ord="fro")
         norma_residuos = resultado["norma_residuos"]
-        momentos = momentos_observaveis_locais(gamma, dims, sistemas_posicao, posicoes)
+        momentos = experimento.momentos_posicao(gamma)
         correlacao_reconstruida = momentos["covariancia"]
         pearson_reconstruido = momentos["pearson"]
         if epsilon == epsilon_visualizacao:
@@ -145,10 +167,7 @@ if __name__ == "__main__":
             energia_reconstruida, erro_energia, entropia,
             distancia, norma_residuos, correlacao_reconstruida, pearson_reconstruido,
         ))
-        marginais_reconstruidas = {
-            sistema: partial_trace(gamma, keep=sistema, dims=dims)
-            for sistema in marginais
-        }
+        marginais_reconstruidas = experimento.calcular_marginais(gamma)
         registrar_resultado(
             caminho_protocolo, resultado, marginais_reconstruidas,
             epsilon=epsilon, learnrate=learnrate, multiplicadores_iniciais=multiplicadores_iniciais,
@@ -195,17 +214,23 @@ if __name__ == "__main__":
     if estado_visualizacao is not None:
         gamma_visualizacao, pearson_visualizacao = estado_visualizacao
         grade = np.linspace(-5.0, 5.0, 41)
-        densidade = distribuicao_conjunta_posicoes(gamma_visualizacao, grade, sistemas_posicao, dims)
-
-        figura, eixo = plt.subplots(figsize=(6, 5), layout="constrained")
-        imagem = eixo.contourf(grade, grade, densidade.T, levels=40, cmap="viridis")
-        eixo.set_aspect("equal")
-        eixo.set_xlabel(r"$x_0$")
-        eixo.set_ylabel(r"$x_1$")
-        eixo.set_title(
-            f"Distribuição conjunta de posições (ε = {epsilon_visualizacao:g})\n"
-            f"Correlação de Pearson = {pearson_visualizacao:.4f}"
+        visualizar_posicoes_conjuntas(
+            gamma_visualizacao, grade, MODOS, DIMENSOES,
+            titulo=f"Distribuição conjunta de posições (ε = {epsilon_visualizacao:g})\n"
+                   f"Correlação de Pearson = {pearson_visualizacao:.4f}",
         )
-        figura.colorbar(imagem, ax=eixo, label=r"$P(x_0, x_1)$")
 
     plt.show()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--figura-frobenius", action="store_true",
+        help="Grava o PNG com a varredura e as estimativas de Frobenius.",
+    )
+    if parser.parse_args().figura_frobenius:
+        plt.switch_backend("Agg")
+        print(figura_frobenius())
+    else:
+        main()

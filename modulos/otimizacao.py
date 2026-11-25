@@ -131,3 +131,36 @@ def gradient_acendent_sthocastical(
         u[mask] += tau * grad
 
     return u, historico
+
+
+def varrer_dual(criar_problema, epsilons, *, fator_learnrate,
+                reutilizar_multiplicadores=False, u_inicial=None, **opcoes):
+    """Gera um resultado por ε na ordem recebida, inclusive sem convergência.
+
+    u_inicial pode ser um vetor ou uma função que recebe o problema. Com
+    reutilização, a inicialização só é usada no primeiro ponto.
+    """
+    for epsilon in epsilons:
+        problema = criar_problema(epsilon)
+        inicio = u_inicial(problema) if callable(u_inicial) else u_inicial
+        resultado = otimizar_dual(
+            problema, u_inicial=inicio, learnrate=fator_learnrate * epsilon, **opcoes,
+        )
+        if reutilizar_multiplicadores:
+            u_inicial = resultado["multiplicadores"].copy()
+        yield resultado
+
+
+def varrer_taxas_dual(criar_problema, epsilons, fatores, **opcoes):
+    """Retorna a matriz de resíduos finais com uma linha por fator e uma coluna por ε."""
+    epsilons, fatores = tuple(epsilons), tuple(fatores)
+    residuos = np.empty((len(fatores), len(epsilons)))
+    for j, epsilon in enumerate(epsilons):
+        problema = criar_problema(epsilon)
+        for i, fator in enumerate(fatores):
+            resultado = otimizar_dual(
+                problema, learnrate=fator * epsilon,
+                salvar_matriz_densidade=False, **opcoes,
+            )
+            residuos[i, j] = resultado["norma_residuos"]
+    return residuos

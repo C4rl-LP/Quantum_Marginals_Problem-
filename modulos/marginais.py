@@ -1,4 +1,4 @@
-from .operadores import base_hermitiana, embed_operator
+from .operadores import base_hermitiana, embed_operator, parse_subsystem_key, partial_trace
 from .validacoes import validar_dimensoes, validar_marginais
 from typing import Dict, List, Sequence, Tuple, Union
 import numpy as np
@@ -33,3 +33,11 @@ def restricoes_lineares(
     b_full = np.array(b_list, dtype=float)
 
     return M_full, b_full
+
+
+def reduzir_marginais(estado, sistemas, dims):
+    """Retorna as reduções na ordem iterada, indexadas pelas chaves fornecidas."""
+    return {
+        chave: partial_trace(estado, keep=parse_subsystem_key(chave), dims=dims)
+        for chave in sistemas
+    }

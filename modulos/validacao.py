@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 import numpy as np
-from .operadores import parse_subsystem_key, partial_trace
+from .marginais import reduzir_marginais
 
 
 def verifica_densidade(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any]: 
@@ -41,6 +41,21 @@ def _verify_density_matrix(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any
 
 
 
+def comparar_marginais(estado, marginais, dims):
+    """Retorna a redução, o alvo e os erros de Frobenius e máximo por chave."""
+    diagnosticos = {}
+    for chave, reducao in reduzir_marginais(estado, marginais, dims).items():
+        alvo = np.asarray(marginais[chave], dtype=complex)
+        diferenca = reducao - alvo
+        diagnosticos[chave] = {
+            "frobenius_error": float(np.linalg.norm(diferenca, "fro")),
+            "max_abs_error": float(np.max(np.abs(diferenca))),
+            "calculated_marginal": reducao,
+            "target_marginal": alvo,
+        }
+    return diagnosticos
+
+
 def verify_marginals(
     rho: Optional[np.ndarray],
     marginals_dict: Dict[Union[str, Tuple[int, ...]], np.ndarray],
@@ -71,18 +86,10 @@ def verify_marginals(
     is_psd = bool(min_eval >= -tol)
     purity = float(np.real(np.trace(rho_sym @ rho_sym)))
 
-    marginal_errors: Dict[str, Dict[str, Any]] = {}
-    for k, omega in marginals_dict.items():
-        sub_tuple = parse_subsystem_key(k)
-        omega_np = np.asarray(omega, dtype=complex)
-        calc_marginal = partial_trace(rho_sym, keep=sub_tuple, dims=dims)
-        diff = calc_marginal - omega_np
-        marginal_errors[str(k)] = {
-            "frobenius_error": float(np.linalg.norm(diff, "fro")),
-            "max_abs_error": float(np.max(np.abs(diff))),
-            "calculated_marginal": calc_marginal,
-            "target_marginal": omega_np,
-        }
+    marginal_errors = {
+        str(chave): dados
+        for chave, dados in comparar_marginais(rho_sym, marginals_dict, dims).items()
+    }
 
     return {
         "is_feasible": True,

@@ -12,12 +12,12 @@ sys.path.insert(0, str(ROOT))
 
 from modulos.Hamiltoniano_ex import hamiltoniano_bilinear
 from modulos.dual_entropico import DualEntropico
-from modulos.estados import entropia_von_neumann, tensor
+from modulos.estados import entropia_von_neumann, estado_termico_oscilador, tensor
 from modulos.marginais import restricoes_lineares
-from modulos.operadores import momentos_observaveis_locais, operador_posicao, partial_trace
-from modulos.otimizacao import otimizar_dual
-from modulos.visualizacao import distribuicao_conjunta_posicoes, visualizar_marginais
-from tests.potencial_harmonico.potencial_harmonico import marginal_termica
+from modulos.operadores import momentos_observaveis_locais, operador_posicao
+from modulos.otimizacao import varrer_dual
+from modulos.validacao import comparar_marginais
+from modulos.visualizacao import visualizar_marginais, visualizar_posicoes_conjuntas
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     indice_visualizacao = 0
     pares_interacao = [(0, 1, g)]
     marginais = {
-        (i,): marginal_termica(dim, epsilon=temperatura_local, omega=omega)
+        (i,): estado_termico_oscilador(dim, temperatura=temperatura_local, omega=omega)
         for i, dim in enumerate(dims)
     }
     H = hamiltoniano_bilinear(dims, omega, pares_interacao)
@@ -49,21 +49,23 @@ def main():
         ("Correlação de Pearson", momentos_produto["pearson"]),
     )
     dados = []
+    marginais_por_epsilon = []
     estados = []
     erros_marginais = {chave: [] for chave in marginais}
-    u_inicial = None
-    for epsilon in epsilons:
-        problema = DualEntropico(H, Q, q, epsilon)
-        resultado = otimizar_dual(
-            problema, u_inicial=u_inicial, metodo="gradient",
-            tolerancia=1e-10, maxiter=5000, learnrate=0.02 * epsilon,
-        )
-        u_inicial = resultado["multiplicadores"]
+    resultados = varrer_dual(
+        lambda epsilon: DualEntropico(H, Q, q, epsilon), epsilons,
+        fator_learnrate=0.02, reutilizar_multiplicadores=True,
+        tolerancia=1e-10, maxiter=5000,
+    )
+    for epsilon, resultado in zip(epsilons, resultados):
         estado = resultado["estado"]
         estados.append(estado)
-        for chave, marginal in marginais.items():
-            reconstruida = partial_trace(estado, keep=chave, dims=dims)
-            erros_marginais[chave].append(np.linalg.norm(reconstruida - marginal, ord="fro"))
+        comparacao = comparar_marginais(estado, marginais, dims)
+        marginais_por_epsilon.append({
+            chave: dados["calculated_marginal"] for chave, dados in comparacao.items()
+        })
+        for chave, diagnostico in comparacao.items():
+            erros_marginais[chave].append(diagnostico["frobenius_error"])
         energia = np.einsum("ij,ji->", H, estado).real
         momentos = momentos_observaveis_locais(estado, dims, sistemas_posicao, posicoes)
         dados.append((
@@ -92,10 +94,7 @@ def main():
 
     epsilon_visualizacao = epsilons[indice_visualizacao]
     estado = estados[indice_visualizacao]
-    reconstruidas = {
-        chave: partial_trace(estado, keep=chave, dims=dims)
-        for chave in marginais
-    }
+    reconstruidas = marginais_por_epsilon[indice_visualizacao]
 
     figura, _ = visualizar_marginais(marginais)
     figura.suptitle("Marginais térmicas prescritas")
@@ -106,18 +105,12 @@ def main():
     figura_reconstruida.savefig(PASTA_EXPERIMENTO / "marginais_reconstruidas_potencial_harmonico.png", dpi=150)
 
     grade = np.linspace(-5.0, 5.0, 41)
-    densidade = distribuicao_conjunta_posicoes(estado, grade, sistemas_posicao, dims)
     pearson = momentos_observaveis_locais(estado, dims, sistemas_posicao, posicoes)["pearson"]
-    figura, eixo = plt.subplots(figsize=(6, 5), layout="constrained")
-    imagem = eixo.contourf(grade, grade, densidade.T, levels=40, cmap="viridis")
-    eixo.set_aspect("equal")
-    eixo.set_xlabel(r"$x_0$")
-    eixo.set_ylabel(r"$x_1$")
-    eixo.set_title(
-        f"Distribuição conjunta de posições (ε = {epsilon_visualizacao:g})\n"
-        f"Correlação de Pearson = {pearson:.4f}"
+    visualizar_posicoes_conjuntas(
+        estado, grade, sistemas_posicao, dims,
+        titulo=f"Distribuição conjunta de posições (ε = {epsilon_visualizacao:g})\n"
+               f"Correlação de Pearson = {pearson:.4f}",
     )
-    figura.colorbar(imagem, ax=eixo, label=r"$P(x_0, x_1)$")
     plt.show()
 
 

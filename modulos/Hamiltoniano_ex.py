@@ -2,13 +2,19 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from modulos.operadores import embed_operator, operador_posicao
+from .operadores import embed_operator, operador_posicao
+from .validacoes import validar_dimensoes
 
 
 PAULI_X = np.array([[0, 1], [1, 0]])
 PAULI_Y = np.array([[0, -1j], [1j, 0]])
 PAULI_Z = np.diag([1, -1])
 
+
+def hamiltoniano_oscilador(dimensao, omega=1.0):
+    """Retorna o Hamiltoniano local diagonal na base de Fock truncada."""
+    (dimensao,) = validar_dimensoes((dimensao,))
+    return np.diag(omega * (np.arange(dimensao, dtype=float) + 0.5))
 
 
 def hamiltoniano_bilinear(
@@ -26,8 +32,8 @@ def hamiltoniano_bilinear(
     hamiltoniano = np.zeros((dimensao_global, dimensao_global), dtype=complex)
 
     for indice, dimensao in enumerate(dims):
-        energias = omega * (np.arange(dimensao, dtype=float) + 0.5)
-        hamiltoniano += embed_operator(np.diag(energias), (indice,), dims=dims)
+        local = hamiltoniano_oscilador(dimensao, omega)
+        hamiltoniano += embed_operator(local, (indice,), dims=dims)
 
     pares_interacao = tuple(pares_interacao)
     subsistemas_interagentes = {

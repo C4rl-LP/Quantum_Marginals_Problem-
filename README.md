@@ -17,5 +17,5 @@ O arquivo `requeriments.txt` fixa as versões das dependências diretas e instal
 Para rodar o experimento de correlações entre dois qubits:
 
 ```bash
-python tests/Experimento_1.py
+python tests/qubits/Experimento_1.py
 ```
