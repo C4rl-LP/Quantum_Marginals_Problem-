@@ -3,7 +3,7 @@
 import numpy as np
 
 from .estados import entropia_von_neumann
-from .validacoes import validar_escalar_positivo, validar_hermitiana
+from .validacao import validar_escalar_positivo, validar_hermitiana
 
 
 def gap_espectral(hamiltoniano):

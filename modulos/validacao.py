@@ -1,44 +1,173 @@
-"""Diagnósticos numéricos de estados e de extensões marginais."""
+"""Validação de entradas e diagnósticos numéricos de estados e marginais."""
 
+from collections.abc import Mapping
+from numbers import Integral
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
+
 import numpy as np
-from .marginais import reduzir_marginais
+
+from .operadores import reduzir_marginais
 
 
-def verifica_densidade(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any]: 
-    """Verifica hermiticidade, positividade e traço unitário dentro de ``tol``."""
-    rho = np.asarray(rho, dtype=complex)
-    hermitiana = bool(np.allclose(rho, rho.conj().T, atol=tol))
-    autovalores = np.linalg.eigvalsh((rho + rho.conj().T) / 2.0)
-    positiva = bool(np.all(autovalores >= -tol))
-    normalizada = bool(np.isclose(np.trace(rho), 1.0, atol=tol))
-    
+def validar_escalar_positivo(valor, nome="valor"):
+    """Exige um escalar real, finito e estritamente positivo."""
+    a = np.asarray(valor)
+    if a.ndim != 0 or a.dtype.kind not in "iuf" or not np.isfinite(a) or a <= 0:
+        raise ValueError(f"{nome} deve ser um escalar real finito e positivo.")
+    return float(a)
+
+
+def validar_vetor_real(valor, nome="vetor", tamanho=None):
+    """Converte um vetor real finito e verifica seu comprimento opcional."""
+    a = np.asarray(valor)
+    if a.ndim != 1 or a.dtype.kind not in "iuf" or not np.all(np.isfinite(a)):
+        raise ValueError(f"{nome} deve ser um vetor real finito.")
+    if tamanho is not None and len(a) != tamanho:
+        raise ValueError(f"{nome} deve ter comprimento {tamanho}; recebido {len(a)}.")
+    return np.array(a, dtype=float, copy=True)
+
+
+def _matriz_quadrada_finita(valor, nome):
+    matriz = np.asarray(valor, dtype=complex)
+    if matriz.ndim != 2 or matriz.shape[0] == 0 or matriz.shape[0] != matriz.shape[1]:
+        raise ValueError(f"{nome} deve ser uma matriz quadrada não vazia.")
+    if not np.isfinite(matriz).all():
+        raise ValueError(f"{nome} deve conter apenas valores finitos.")
+    return matriz
+
+
+def _parte_hermitiana(matriz):
+    return matriz / 2 + matriz.conj().T / 2
+
+
+def _eh_hermitiana(matriz, tol):
+    return bool(np.allclose(matriz, matriz.conj().T, atol=tol, rtol=0))
+
+
+def validar_hermitiana(valor, nome="matriz", dimensao=None, tol=1e-10):
+    """Exige matriz quadrada não vazia, finita e hermitiana (erro absoluto)."""
+    tol = validar_escalar_positivo(tol, "tol")
+    matriz = _matriz_quadrada_finita(valor, nome)
+    if dimensao is not None and matriz.shape != (dimensao, dimensao):
+        raise ValueError(f"{nome} deve ter formato {(dimensao, dimensao)}.")
+    if not _eh_hermitiana(matriz, tol):
+        raise ValueError(f"{nome} deve ser hermitiana.")
+    return matriz.copy()
+
+
+def validar_densidade(valor, nome="estado", dimensao=None, tol=1e-10):
+    """Exige matriz densidade PSD e de traço um; aceita estados singulares."""
+    matriz = validar_hermitiana(valor, nome, dimensao, tol)
+    if abs(np.trace(matriz) - 1) > tol:
+        raise ValueError(f"{nome} deve ter traço um.")
+    if np.linalg.eigvalsh(_parte_hermitiana(matriz))[0] < -tol:
+        raise ValueError(f"{nome} deve ser positiva semidefinida.")
+    return matriz
+
+
+def validar_dimensoes(dims):
+    """Exige sequência não vazia de dimensões inteiras positivas."""
+    dims = tuple(dims)
+    if not dims or any(isinstance(d, (bool, np.bool_)) or not isinstance(d, Integral)
+                       or d <= 0 for d in dims):
+        raise ValueError("dims deve conter inteiros positivos e não pode ser vazia.")
+    return tuple(int(d) for d in dims)
+
+
+def validar_subsistema(chave, dims):
+    """Valida letras A–Z ou índices, preservando a ordem tensorial informada."""
+    dims = validar_dimensoes(dims)
+    if isinstance(chave, str):
+        texto = chave.strip().upper()
+        if not texto or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" for c in texto):
+            raise ValueError(f"Chave de subsistema inválida: {chave!r}.")
+        indices = tuple(ord(c) - ord('A') for c in texto)
+    elif isinstance(chave, (tuple, list)):
+        indices = tuple(chave)
+    else:
+        raise ValueError("O subsistema deve ser uma string ou sequência de índices.")
+    if (not indices or any(isinstance(i, (bool, np.bool_)) or not isinstance(i, Integral)
+                           or i < 0 or i >= len(dims) for i in indices)
+            or len(set(indices)) != len(indices)):
+        raise ValueError(f"Índices inválidos ou repetidos no subsistema {chave!r}.")
+    return tuple(int(i) for i in indices)
+
+
+def validar_marginais(marginais, dims, tol=1e-10):
+    """Normaliza chaves e valida estados locais, rejeitando chaves equivalentes.
+
+    A ordem das letras/índices deve corresponder à ordem dos fatores na matriz.
+    Esta checagem local não decide se existe uma extensão global.
+    """
+    dims = validar_dimensoes(dims)
+    if not isinstance(marginais, Mapping):
+        raise ValueError("marginais deve ser um mapeamento de subsistemas para matrizes.")
+    resultado = {}
+    for chave, matriz in marginais.items():
+        indices = validar_subsistema(chave, dims)
+        if indices in resultado:
+            raise ValueError(f"Subsistema duplicado: {chave!r} equivale a {indices}.")
+        dimensao = int(np.prod([dims[i] for i in indices]))
+        resultado[indices] = validar_densidade(matriz, f"Marginal {chave!r}", dimensao, tol)
+    return resultado
+
+
+def validar_dados_dual(H, Q, q, epsilon):
+    """Valida operadores globais, alvos e regularização; retorna cópias numéricas."""
+    H = validar_hermitiana(H, "H")
+    Q = tuple(validar_hermitiana(Qi, f"Q[{i}]", H.shape[0])
+              for i, Qi in enumerate(Q))
+    q = validar_vetor_real(q, "q", len(Q))
+    epsilon = validar_escalar_positivo(epsilon, "epsilon")
+    return H, Q, q, epsilon
+
+
+def validar_parametros_otimizacao(u_inicial, quantidade, tolerancia, maxiter):
+    """Valida o vetor inicial, tolerância positiva e limite inteiro de iterações."""
+    u = validar_vetor_real(u_inicial, "u_inicial", quantidade)
+    tolerancia = validar_escalar_positivo(tolerancia, "tolerancia")
+    if isinstance(maxiter, (bool, np.bool_)) or not isinstance(maxiter, Integral) or maxiter <= 0:
+        raise ValueError("maxiter deve ser um inteiro positivo.")
+    return u, tolerancia, int(maxiter)
+
+
+def _diagnosticar_densidade(rho, tol):
+    tol = validar_escalar_positivo(tol, "tol")
+    rho = _matriz_quadrada_finita(rho, "estado")
+    simetrizada = _parte_hermitiana(rho)
+    autovalores = np.linalg.eigvalsh(simetrizada)
+    traco = complex(np.trace(rho))
+    return simetrizada, {
+        "hermitiana": _eh_hermitiana(rho, tol),
+        "hermitian_error": float(np.linalg.norm(rho - rho.conj().T, "fro")),
+        "trace": traco,
+        "trace_error": float(abs(traco - 1)),
+        "eigenvalues": autovalores,
+        "min_eigenvalue": float(autovalores[0]),
+        "is_psd": bool(autovalores[0] >= -tol),
+    }
+
+
+def verifica_densidade(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any]:
+    """Diagnostica hermiticidade, positividade e traço com tolerância absoluta."""
+    _, dados = _diagnosticar_densidade(rho, tol)
     return {
-        "hermitiana": hermitiana,
-        "positiva": positiva,
-        "traco_1": normalizada,
-        "autovalores": autovalores
+        "hermitiana": dados["hermitiana"],
+        "positiva": dados["is_psd"],
+        "traco_1": dados["trace_error"] <= tol,
+        "autovalores": dados["eigenvalues"],
     }
 
 
 def _verify_density_matrix(rho: np.ndarray, tol: float = 1e-10) -> Dict[str, Any]:
-    """Compatibilidade com o formato antigo de diagnóstico booleano/erro.
-
-    A validação é delegada a :func:`verifica_densidade`, evitando manter duas
-    implementações independentes dos mesmos critérios físicos.
-    """
-    resultado = verifica_densidade(rho, tol=tol)
-    autovalores = resultado["autovalores"]
-    hermitian_error = float(np.linalg.norm(np.asarray(rho) - np.asarray(rho).conj().T, "fro"))
-    trace_error = float(abs(np.trace(np.asarray(rho)) - 1.0))
-    min_eigenvalue = float(np.min(autovalores))
+    """Mantém o formato histórico de diagnóstico booleano e erros."""
+    _, dados = _diagnosticar_densidade(rho, tol)
     return {
-        "hermitian_error": hermitian_error,
-        "trace_error": trace_error,
-        "min_eigenvalue": min_eigenvalue,
-        "is_valid": resultado["hermitiana"] and resultado["positiva"] and resultado["traco_1"],
+        "hermitian_error": dados["hermitian_error"],
+        "trace_error": dados["trace_error"],
+        "min_eigenvalue": dados["min_eigenvalue"],
+        "is_valid": dados["hermitiana"] and dados["is_psd"] and dados["trace_error"] <= tol,
     }
-
 
 
 def comparar_marginais(estado, marginais, dims):
@@ -70,35 +199,19 @@ def verify_marginals(
     if rho is None:
         return {"is_feasible": False, "message": "Nenhuma matriz rho fornecida (problema infactível)."}
 
-    rho = np.asarray(rho, dtype=complex)
+    rho_sym, dados = _diagnosticar_densidade(rho, tol)
     if dims is None:
-        num_qubits = int(round(np.log2(rho.shape[0])))
-        dims = [2] * num_qubits
-    dims = tuple(dims)
-
-    herm_err = float(np.linalg.norm(rho - rho.conj().T, "fro"))
-    tr_val = complex(np.trace(rho))
-    tr_err = float(abs(tr_val - 1.0))
-
-    rho_sym = (rho + rho.conj().T) / 2.0
-    evals = np.linalg.eigvalsh(rho_sym)
-    min_eval = float(np.min(evals))
-    is_psd = bool(min_eval >= -tol)
-    purity = float(np.real(np.trace(rho_sym @ rho_sym)))
+        dims = (2,) * int(round(np.log2(rho_sym.shape[0])))
+    dados.pop("hermitiana")
 
     marginal_errors = {
-        str(chave): dados
-        for chave, dados in comparar_marginais(rho_sym, marginals_dict, dims).items()
+        str(chave): comparacao
+        for chave, comparacao in comparar_marginais(rho_sym, marginals_dict, tuple(dims)).items()
     }
 
     return {
         "is_feasible": True,
-        "hermitian_error": herm_err,
-        "trace": tr_val,
-        "trace_error": tr_err,
-        "eigenvalues": evals,
-        "min_eigenvalue": min_eval,
-        "is_psd": is_psd,
-        "purity": purity,
+        **dados,
+        "purity": float(np.trace(rho_sym @ rho_sym).real),
         "marginal_errors": marginal_errors,
     }

@@ -38,7 +38,7 @@ def estado_gibbs(H: np.ndarray, beta: float) -> np.ndarray:
 def estado_termico_oscilador(dimensao, temperatura=1.0, omega=1.0):
     """Retorna o Gibbs local do oscilador em unidades com k_B = 1."""
     from .Hamiltoniano_ex import hamiltoniano_oscilador
-    from .validacoes import validar_escalar_positivo
+    from .validacao import validar_escalar_positivo
 
     temperatura = validar_escalar_positivo(temperatura, "temperatura local")
     return estado_gibbs(hamiltoniano_oscilador(dimensao, omega), beta=1 / temperatura)

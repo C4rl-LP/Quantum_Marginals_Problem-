@@ -203,3 +203,10 @@ def parse_subsystem_key(key: Union[str, Sequence[int]], num_qubits: int = 3) -> 
         key_upper = key.upper().strip()
         return tuple(char_map[ch] for ch in key_upper if ch in char_map)
     raise TypeError(f"Formato de subsistema inválido: {key!r}")
+
+def reduzir_marginais(estado, sistemas, dims):
+    """Retorna as reduções na ordem iterada, indexadas pelas chaves fornecidas."""
+    return {
+        chave: partial_trace(estado, keep=parse_subsystem_key(chave), dims=dims)
+        for chave in sistemas
+    }

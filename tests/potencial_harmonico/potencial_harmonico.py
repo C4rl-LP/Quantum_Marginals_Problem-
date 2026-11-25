@@ -14,7 +14,7 @@ from modulos.estados import estado_termico_oscilador
 from modulos.operadores import momentos_observaveis_locais, operador_posicao
 from modulos.Hamiltoniano_ex import hamiltoniano_bilinear
 from modulos.otimizacao import varrer_taxas_dual
-from modulos.validacoes import validar_dimensoes, validar_marginais
+from modulos.validacao import validar_dimensoes, validar_marginais
 from modulos.visualizacao import salvar_figura, visualizar_taxas_dual
 
 

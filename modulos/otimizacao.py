@@ -1,5 +1,5 @@
 import numpy as np
-from .validacoes import (
+from .validacao import (
     validar_escalar_positivo,
     validar_parametros_otimizacao,
 )

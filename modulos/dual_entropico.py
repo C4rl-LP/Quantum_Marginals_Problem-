@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import expm
-from .validacoes import validar_dados_dual, validar_vetor_real
+from .validacao import validar_dados_dual, validar_vetor_real
 
 
 class DualEntropico:

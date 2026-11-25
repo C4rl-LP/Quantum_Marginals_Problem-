@@ -12,8 +12,7 @@ escolhem os parâmetros físicos, os pontos das varreduras e os arquivos de saí
 | `Hamiltoniano_ex.py` | Hamiltonianos de osciladores e de cadeias abertas. | `hamiltoniano_oscilador`, `hamiltoniano_bilinear`, `Hamiltoniano_ZZ`, `Hamiltoniano_XY`, `dimensoes_qubits` |
 | `operadores.py` | Operações locais e multipartidas. | `partial_trace`, `embed_operator`, `base_hermitiana`, `parse_subsystem_key`, `operador_posicao`, `momentos_observaveis_locais` |
 | `marginais.py` | Reduções de estados e construção das igualdades marginais. | `reduzir_marginais`, `restricoes_lineares` |
-| `validacoes.py` | Validação das entradas numéricas. | `validar_dimensoes`, `validar_densidade`, `validar_marginais`, `validar_dados_dual` |
-| `validacao.py` | Comparação entre reduções e marginais prescritas e diagnóstico físico do estado. | `comparar_marginais`, `verify_marginals`, `verifica_densidade` |
+| `validacao.py` | Validação de entradas, diagnóstico físico do estado e comparação de marginais. | `validar_densidade`, `validar_dimensoes`, `validar_marginais`, `validar_dados_dual`, `comparar_marginais`, `verify_marginals`, `verifica_densidade` |
 | `sdp.py` | Formulação e resolução da factibilidade por SDP. | `build_qmp_sdp`, `solve_qmp` |
 | `dual_entropico.py` | Formulações exponencial e logarítmica do dual. | `DualEntropico` |
 | `otimizacao.py` | Maximização do dual e varreduras numéricas. | `otimizar_dual`, `gradient_acendent`, `gradient_acendent_sthocastical`, `varrer_dual`, `varrer_taxas_dual` |
@@ -33,6 +32,10 @@ local de Fock truncado e retorna a matriz de Gibbs com temperatura inversa
 (1/T), em unidades com (k_B=1). A temperatura local é independente do
 parâmetro de regularização ε. `negatividade` mede a bipartição entre o
 primeiro qubit e o restante do sistema.
+
+As funções `validar_*` em `modulos.validacao` rejeitam entradas inválidas com
+`ValueError`. `verifica_densidade` informa hermiticidade, positividade e traço
+unitário com tolerância absoluta, o mesmo critério de `validar_densidade`.
 
 `reduzir_marginais(estado, sistemas, dims)` retorna as matrizes reduzidas
 indexadas pelas chaves fornecidas. `comparar_marginais(estado, marginais, dims)`

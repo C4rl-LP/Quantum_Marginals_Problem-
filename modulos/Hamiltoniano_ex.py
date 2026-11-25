@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from .operadores import embed_operator, operador_posicao
-from .validacoes import validar_dimensoes
+from .validacao import validar_dimensoes
 
 
 PAULI_X = np.array([[0, 1], [1, 0]])
