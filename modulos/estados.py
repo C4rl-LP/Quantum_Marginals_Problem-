@@ -19,6 +19,22 @@ def ketbra(psi: np.ndarray) -> np.ndarray:
     return np.outer(psi, psi.conj())
 
 
+def estado_fundamental(H: np.ndarray) -> tuple[float, np.ndarray]:
+    """Retorna a menor energia e o projetor de um autovetor fundamental."""
+    energias, vetores = np.linalg.eigh(H)
+    return float(energias[0]), ketbra(vetores[:, 0])
+
+
+def estado_gibbs(H: np.ndarray, beta: float) -> np.ndarray:
+    """Retorna o estado térmico normalizado à temperatura inversa beta >= 0."""
+    if not np.isfinite(beta) or beta < 0:
+        raise ValueError("beta deve ser finito e não negativo.")
+    energias, vetores = np.linalg.eigh(H)
+    pesos = np.exp(-beta * (energias - energias[0]))
+    pesos /= pesos.sum()
+    return (vetores * pesos) @ vetores.conj().T
+
+
 def tensor(*args: np.ndarray) -> np.ndarray:
     """Calcula o produto de Kronecker na mesma ordem dos argumentos."""
     resultado = args[0]

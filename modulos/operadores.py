@@ -4,6 +4,14 @@ from typing import List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 
+def operador_posicao(dim: int) -> np.ndarray:
+    """Retorna X = (a + a†)/sqrt(2) na base de Fock truncada."""
+    if dim < 1:
+        raise ValueError("A dimensão local deve ser positiva.")
+    a = np.diag(np.sqrt(np.arange(1, dim)), k=1)
+    return (a + a.T) / np.sqrt(2)
+
+
 def partial_trace(
     rho: np.ndarray,
     keep: Optional[Sequence[int]] = None,
@@ -51,6 +59,44 @@ def partial_trace(
     reduced_tensor = np.einsum(rho_tensor, bra_indices + ket_indices, out_bra + out_ket)
     d_out = int(np.prod([dims[s] for s in keep_systems]))
     return reduced_tensor.reshape(d_out, d_out)
+
+
+def momentos_observaveis_locais(rho, dims, sistemas, observaveis):
+    """Calcula momentos de dois observáveis hermitianos em subsistemas distintos.
+
+    As médias e variâncias seguem a ordem solicitada. Pearson é NaN
+    quando algum observável tem variância nula.
+    """
+    i, j = sistemas
+    if i == j or not (0 <= i < len(dims) and 0 <= j < len(dims)):
+        raise ValueError("Informe dois subsistemas distintos e válidos.")
+    A, B = map(np.asarray, observaveis)
+    if A.shape != (dims[i], dims[i]) or B.shape != (dims[j], dims[j]):
+        raise ValueError("As formas dos observáveis devem corresponder aos subsistemas.")
+
+    reduzida = partial_trace(rho, keep=(i, j), dims=dims)
+    if i > j:
+        reduzida = reduzida.reshape(dims[j], dims[i], dims[j], dims[i])
+        reduzida = reduzida.transpose(1, 0, 3, 2)
+    reduzida = reduzida.reshape(dims[i], dims[j], dims[i], dims[j])
+    rho_a = np.trace(reduzida, axis1=1, axis2=3)
+    rho_b = np.trace(reduzida, axis1=0, axis2=2)
+    media_a = np.einsum("ij,ji->", A, rho_a).real
+    media_b = np.einsum("ij,ji->", B, rho_b).real
+    A_centrado = A - media_a * np.eye(dims[i])
+    B_centrado = B - media_b * np.eye(dims[j])
+    cruzado = np.einsum("ij,kl,jlik->", A, B, reduzida, optimize=True).real
+    covariancia = cruzado - media_a * media_b
+    var_a = np.einsum("ij,jk,ki->", A_centrado, A_centrado, rho_a, optimize=True).real
+    var_b = np.einsum("ij,jk,ki->", B_centrado, B_centrado, rho_b, optimize=True).real
+    pearson = covariancia / (np.sqrt(var_a) * np.sqrt(var_b)) if var_a > 0 and var_b > 0 else np.nan
+    return {
+        "medias": (float(media_a), float(media_b)),
+        "variancias": (float(var_a), float(var_b)),
+        "momento_cruzado": float(cruzado),
+        "covariancia": float(covariancia),
+        "pearson": float(pearson),
+    }
 
 
 def _coordenadas_hermitianas(operator: np.ndarray) -> np.ndarray:

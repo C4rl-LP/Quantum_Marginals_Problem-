@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from modulos.operadores import embed_operator
+from modulos.operadores import embed_operator, operador_posicao
 
 
 PAULI_X = np.array([[0, 1], [1, 0]])
@@ -16,6 +16,7 @@ def hamiltoniano_bilinear(
     omega: float,
     pares_interacao: Sequence[tuple[int, int, float]],
 ) -> np.ndarray:
+    """Soma as energias locais e as interações na convenção -g_ij X_i X_j."""
 
     dims = tuple(dims)
     if not dims or any(not isinstance(d, (int, np.integer)) or d < 1 for d in dims):
@@ -32,14 +33,10 @@ def hamiltoniano_bilinear(
     subsistemas_interagentes = {
         indice for i, j, _ in pares_interacao for indice in (i, j)
     }
-    posicoes = {}
-    for indice in subsistemas_interagentes:
-        dimensao = dims[indice]
-        aniquilacao = np.diag(np.sqrt(np.arange(1, dimensao)), k=1)
-        posicoes[indice] = (aniquilacao + aniquilacao.T) / np.sqrt(2.0)
+    posicoes = {indice: operador_posicao(dims[indice]) for indice in subsistemas_interagentes}
 
     for i, j, g_ij in pares_interacao:
-        hamiltoniano += embed_operator(
+        hamiltoniano -= embed_operator(
             g_ij * np.kron(posicoes[i], posicoes[j]), (i, j), dims=dims
         )
 
