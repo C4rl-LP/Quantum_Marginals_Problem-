@@ -24,8 +24,8 @@ def main():
     dims = (4, 4)
     omega = 1.0
     g = 0.5
-    temperatura_local = 5.0
-    epsilons = np.geomspace(5.0, 0.5, 15)
+    temperatura_local = 5
+    epsilons = np.geomspace(5, 1, 10)
     indice_visualizacao = 0
     pares_interacao = [(0, 1, g)]
     marginais = {
@@ -50,6 +50,7 @@ def main():
     )
     dados = []
     estados = []
+    erros_marginais = {chave: [] for chave in marginais}
     u_inicial = None
     for epsilon in epsilons:
         problema = DualEntropico(H, Q, q, epsilon)
@@ -60,6 +61,9 @@ def main():
         u_inicial = resultado["multiplicadores"]
         estado = resultado["estado"]
         estados.append(estado)
+        for chave, marginal in marginais.items():
+            reconstruida = partial_trace(estado, keep=chave, dims=dims)
+            erros_marginais[chave].append(np.linalg.norm(reconstruida - marginal, ord="fro"))
         energia = np.einsum("ij,ji->", H, estado).real
         momentos = momentos_observaveis_locais(estado, dims, sistemas_posicao, posicoes)
         dados.append((
@@ -70,8 +74,6 @@ def main():
         print(f"ε={epsilon:g} | convergiu={resultado['convergiu']} | resíduos={resultado['norma_residuos']:.3e}")
 
     figura, eixos = plt.subplots(4, 2, sharex=True, figsize=(11, 10), layout="constrained")
-    figura.delaxes(eixos[-1, 1])
-    eixos[-2, 1].tick_params(labelbottom=True)
     figura.suptitle(f"Reconstrução com marginais térmicas (T = {temperatura_local:g})")
     for eixo, (rotulo, referencia), valores in zip(eixos.flat, medidas, np.asarray(dados).T):
         eixo.semilogx(epsilons, valores, marker=".")
@@ -80,6 +82,12 @@ def main():
         if referencia is not None:
             eixo.axhline(referencia, color="0.4", linestyle="--", label="Estado produto")
             eixo.legend()
+    eixo_erros = eixos[-1, 1]
+    for (i,), estilo in zip(marginais, ("-", "--")):
+        eixo_erros.semilogx(epsilons, erros_marginais[(i,)], linestyle=estilo, label=f"Oscilador {i}")
+    eixo_erros.set_ylabel(r"Erro da marginal $\|\hat{\rho}_i - \rho_i\|_F$")
+    eixo_erros.grid(alpha=0.25)
+    eixo_erros.legend()
     figura.supxlabel(r"Regularização $\epsilon$")
 
     epsilon_visualizacao = epsilons[indice_visualizacao]

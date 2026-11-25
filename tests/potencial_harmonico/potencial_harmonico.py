@@ -19,6 +19,8 @@ def construir_problema(
     omega: float = 1.0,
     epsilon: float = 1.0,
     pares_interacao: Sequence[tuple[int, int, float]] = (),
+    *,
+    forma: str = "exponencial",
 ) -> DualEntropico:
 
     dims = tuple(dims)
@@ -34,6 +36,7 @@ def construir_problema(
         Q=observaveis,
         q=alvos,
         epsilon=epsilon,
+        forma=forma,
     )
 
 

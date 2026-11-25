@@ -66,7 +66,7 @@ class DualEntropico:
         Gamma, _ = self._calcular_estado(u)
         return Gamma
 
-    def avaliar(self, u, mask = None):
+    def avaliar(self, u, mask=None):
 
         Gamma, termo = self._calcular_estado(u)
 
@@ -74,7 +74,7 @@ class DualEntropico:
             np.dot(u, self.q)
             - termo
         )
-        if mask == None:
+        if mask is None:
             mask = np.arange(len(self.q))
         gradiente = np.array([
             self.q[i] - np.einsum("ij,ji->", self.Q[i], Gamma).real

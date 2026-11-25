@@ -8,7 +8,7 @@ from .validacoes import (
 def otimizar_dual(
     problema: "DualEntropico",
     u_inicial=None,
-    tolerancia=1e-8,
+    tolerancia=1e-6,
     maxiter=2000,
     metodo="gradient",
     salvar_matriz_densidade=True,
