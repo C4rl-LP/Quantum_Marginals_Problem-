@@ -40,7 +40,7 @@ def construir_problema(
     )
 
 
-# Vamos definir marginal termica para OH 
+# Vamos definir marginal termica para OH
 def marginal_termica(dimensao, epsilon=1, omega= 1):
     # Por questão numerica vamos utilizar um o log-sum-exp trick
     a = 0
@@ -65,15 +65,31 @@ def correlacao_posicao(estado_completo, marginais, dims):
         posicoes.append(embed_operator(X, sistema, dims=dims))
 
     X_a, X_b = posicoes
-    return float(np.einsum("ij,ji->", X_a @ X_b, estado_completo).real)
+    mediaX_a = float(np.einsum("ij,ji->", X_a, estado_completo).real)
+    mediaX_b = float(np.einsum("ij,ji->", X_b, estado_completo).real)
+    termocruzado = float(np.einsum("ij,ji->", X_a @ X_b, estado_completo).real)
+    return mediaX_a*mediaX_b + termocruzado
+
+def estado_fundamental(H: np.ndarray):
+    """Retorna a energia e a matriz densidade do estado fundamental."""
+
+    autovalores, autovetores = np.linalg.eigh(H)
+
+    E0 = autovalores[0]
+    psi0 = autovetores[:, 0]
+
+    gamma0 = np.outer(psi0, psi0.conj())
+
+    return E0, gamma0
 
 if __name__ == "__main__":
     dims = (4, 4)
+    epslon = 5
     marginais = {
-        (indice,): marginal_termica(dimensao)
+        (indice,): marginal_termica(dimensao, epsilon= epslon)
         for indice, dimensao in enumerate(dims)
     }
-    problema = construir_problema(marginais, dims=dims)
+    problema = construir_problema(marginais, dims=dims, epsilon=epslon,pares_interacao=[(0, 1, g)])
     resultado = otimizar_dual(problema, tolerancia=1e-10, maxiter=5000, learnrate=0.1)
     print(f"Convergiu: {resultado['convergiu']}")
     print(f"Resíduo da normalização: {resultado['residuos'][0]:.3e}")
