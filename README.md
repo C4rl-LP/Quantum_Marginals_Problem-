@@ -4,7 +4,7 @@ Este projeto estuda o Problema das Marginais Quânticas (QMP) por meio de experi
 
 ## Instalação
 
-Na raiz do repositório, crie e ative um ambiente virtual com Python 3.13:
+Na raiz do repositório, crie e ative um ambiente virtual com Python:
 
 ```bash
 python3 -m venv .venv
